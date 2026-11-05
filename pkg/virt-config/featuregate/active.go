@@ -90,6 +90,14 @@ const (
 	// To support incremental backups, a QCOW2 overlay must be created on top of the VM's raw disk image.
 	IncrementalBackupGate = "IncrementalBackup"
 
+	// Owner: sig-compute
+	// Alpha: v1.10.0
+	//
+	// VMHibernation enables saving the memory and device state of a running
+	// VirtualMachine to a PVC, stopping it, and resuming it from that state on
+	// the next start instead of booting it.
+	VMHibernation = "VMHibernation"
+
 	VirtIOFSStorageVolumeGate = "EnableVirtioFsStorageVolumes"
 
 	// Owner: @alaypatel07
@@ -337,4 +345,5 @@ func init() {
 	RegisterFeatureGate(FeatureGate{Name: MigrationStallDetection, State: Alpha})
 	RegisterFeatureGate(FeatureGate{Name: CrossArchitectureVirtualization, State: Alpha})
 	RegisterFeatureGate(FeatureGate{Name: PortRangesSpec, State: Alpha})
+	RegisterFeatureGate(FeatureGate{Name: VMHibernation, State: Alpha})
 }

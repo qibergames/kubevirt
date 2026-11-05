@@ -1083,6 +1083,10 @@ const (
 
 	// Backup represents a utility volume which will be used to collect backup output
 	Backup UtilityVolumeType = "Backup"
+
+	// SavedState represents a utility volume which receives the memory and
+	// device state of a hibernating VirtualMachineInstance
+	SavedState UtilityVolumeType = "SavedState"
 )
 
 type UtilityVolume struct {

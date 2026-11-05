@@ -1089,6 +1089,8 @@ rules:
   - virtualmachines/addvolume
   - virtualmachines/removevolume
   - virtualmachines/memorydump
+  - virtualmachines/hibernate
+  - virtualmachines/discardsavedstate
   - virtualmachines/evacuate/cancel
   verbs:
   - update
@@ -1275,6 +1277,8 @@ rules:
   - virtualmachines/addvolume
   - virtualmachines/removevolume
   - virtualmachines/memorydump
+  - virtualmachines/hibernate
+  - virtualmachines/discardsavedstate
   - virtualmachines/evacuate/cancel
   verbs:
   - update

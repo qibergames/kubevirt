@@ -1056,6 +1056,8 @@ spec:
           - virtualmachines/addvolume
           - virtualmachines/removevolume
           - virtualmachines/memorydump
+          - virtualmachines/hibernate
+          - virtualmachines/discardsavedstate
           - virtualmachines/evacuate/cancel
           verbs:
           - update
@@ -1242,6 +1244,8 @@ spec:
           - virtualmachines/addvolume
           - virtualmachines/removevolume
           - virtualmachines/memorydump
+          - virtualmachines/hibernate
+          - virtualmachines/discardsavedstate
           - virtualmachines/evacuate/cancel
           verbs:
           - update
