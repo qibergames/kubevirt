@@ -40,6 +40,7 @@ service Cmd {
   rpc BackupVirtualMachine(BackupRequest) returns (Response) {}
   rpc RedefineCheckpoint(RedefineCheckpointRequest) returns (RedefineCheckpointResponse) {}
   rpc GetVMStats(VMStatsRequest) returns (VMStatsResponse) {}
+  rpc SaveVirtualMachine(SaveVirtualMachineRequest) returns (Response) {}
 }
 
 message QemuVersionResponse {
@@ -201,6 +202,12 @@ message FreezeRequest {
 message MemoryDumpRequest {
   VMI vmi = 1;
   string dumpPath = 2;
+}
+
+message SaveVirtualMachineRequest {
+  VMI vmi = 1;
+  // savePath is the saved state file, on a utility volume mounted in the launcher
+  string savePath = 2;
 }
 
 message SEVInfoResponse {

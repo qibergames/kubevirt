@@ -192,6 +192,7 @@ type DomainManager interface {
 	Exec(string, string, []string, int32) (string, error)
 	GuestPing(string) error
 	MemoryDump(vmi *v1.VirtualMachineInstance, dumpPath string) error
+	SaveVMI(vmi *v1.VirtualMachineInstance, savePath string) error
 	BackupVirtualMachine(*v1.VirtualMachineInstance, *backupv1.BackupOptions) error
 	RedefineCheckpoint(*v1.VirtualMachineInstance, *backupv1.BackupCheckpoint) (checkpointInvalid bool, err error)
 	GetQemuVersion() (string, error)
@@ -218,6 +219,8 @@ type LibvirtDomainManager struct {
 	storageManager *storage.StorageManager
 
 	hotplugHostDevicesInProgress chan struct{}
+	// savingState is set while the domain state is being saved to a file.
+	savingState atomic.Bool
 
 	virtShareDir           string
 	ephemeralDiskDir       string
@@ -1418,7 +1421,7 @@ func (l *LibvirtDomainManager) SyncVMI(vmi *v1.VirtualMachineInstance, allowEmul
 		return nil, err
 	}
 	defer dom.Free()
-	domState, _, err := dom.GetState()
+	domState, reason, err := dom.GetState()
 	if err != nil {
 		logger.Reason(err).Error(failedGetDomainState)
 		return nil, err
@@ -1446,6 +1449,12 @@ func (l *LibvirtDomainManager) SyncVMI(vmi *v1.VirtualMachineInstance, allowEmul
 		if err := l.startDomain(vmi, dom); err != nil {
 			return nil, err
 		}
+	case cli.IsDown(domState) && util.ConvReason(domState, reason) == api.ReasonSaved:
+		// The state was saved and the domain stopped, the VMI is about to stop too.
+		return util.GetDomainSpecWithFlags(dom, 0)
+	case cli.IsPaused(domState) && l.isSavingState():
+		// The save pauses the domain, it is stopped or resumed when the save ends.
+		break
 	case cli.IsPaused(domState) && !l.paused.contains(vmi.UID):
 		// TODO: if state change reason indicates a system error, we could try something smarter
 		if err := dom.Resume(); err != nil {
@@ -1578,6 +1587,19 @@ func (l *LibvirtDomainManager) startDomain(
 	logger := log.Log.Object(vmi)
 	if err := l.generateCloudInitISO(vmi, &dom); err != nil {
 		return err
+	}
+
+	if vmi.Spec.SavedStateSource != nil {
+		if err := l.startFromSavedState(vmi, dom); err != nil {
+			return err
+		}
+		logger.Info("Domain started from its saved state.")
+		// The guest clock stood still while the domain was stopped.
+		l.setGuestTime(vmi)
+		if vmi.ShouldStartPaused() {
+			l.paused.add(vmi.UID)
+		}
+		return nil
 	}
 
 	createFlags := getDomainCreateFlags(vmi)
@@ -1945,6 +1967,10 @@ func (l *LibvirtDomainManager) getDomainSpec(dom cli.VirDomain) (*api.DomainSpec
 
 func (l *LibvirtDomainManager) MemoryDump(vmi *v1.VirtualMachineInstance, dumpPath string) error {
 	return l.storageManager.MemoryDump(vmi, dumpPath)
+}
+
+func (l *LibvirtDomainManager) SaveVMI(vmi *v1.VirtualMachineInstance, savePath string) error {
+	return l.saveVMI(vmi, savePath)
 }
 
 func (l *LibvirtDomainManager) PauseVMI(vmi *v1.VirtualMachineInstance) error {

@@ -439,6 +439,7 @@ type KubeVirtMetadata struct {
 	Backup           *BackupMetadata           `xml:"backup,omitempty"`
 	AccessCredential *AccessCredentialMetadata `xml:"accessCredential,omitempty"`
 	MemoryDump       *MemoryDumpMetadata       `xml:"memoryDump,omitempty"`
+	SavedState       *SavedStateMetadata       `xml:"savedState,omitempty"`
 }
 
 type AccessCredentialMetadata struct {
@@ -453,6 +454,25 @@ type MemoryDumpMetadata struct {
 	Completed      bool         `xml:"completed,omitempty"`
 	Failed         bool         `xml:"failed,omitempty"`
 	FailureReason  string       `xml:"failureReason,omitempty"`
+}
+
+type SavedStateOperation string
+
+const (
+	SavedStateOperationSave    SavedStateOperation = "save"
+	SavedStateOperationRestore SavedStateOperation = "restore"
+)
+
+// SavedStateMetadata reports a save of the domain state to a file, or a
+// restore of the domain from one.
+type SavedStateMetadata struct {
+	Operation      SavedStateOperation `xml:"operation,omitempty"`
+	FileName       string              `xml:"fileName,omitempty"`
+	StartTimestamp *metav1.Time        `xml:"startTimestamp,omitempty"`
+	EndTimestamp   *metav1.Time        `xml:"endTimestamp,omitempty"`
+	Completed      bool                `xml:"completed,omitempty"`
+	Failed         bool                `xml:"failed,omitempty"`
+	FailureReason  string              `xml:"failureReason,omitempty"`
 }
 
 type MigrationMetadata struct {

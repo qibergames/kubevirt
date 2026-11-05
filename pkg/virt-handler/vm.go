@@ -1069,6 +1069,7 @@ func (c *VirtualMachineController) updateVMIStatusFromDomain(vmi *v1.VirtualMach
 	}
 	c.updateGuestInfoFromDomain(vmi, domain)
 	c.updateVolumeStatusesFromDomain(vmi, domain)
+	updateSavedStateFromDomain(vmi, domain)
 	c.updateFSFreezeStatus(vmi, domain)
 	c.updateBackupStatus(vmi, domain)
 	c.updateMachineType(vmi, domain)
@@ -2023,6 +2024,10 @@ func (c *VirtualMachineController) handleRunningVMI(vmi *v1.VirtualMachineInstan
 		return err
 	}
 
+	if err := c.saveState(vmi); err != nil {
+		return err
+	}
+
 	isolationRes, err := c.podIsolationDetector.Detect(vmi)
 	if err != nil {
 		return fmt.Errorf(failedDetectIsolationFmt, err)
@@ -2079,7 +2084,11 @@ func (c *VirtualMachineController) handleStartingVMI(
 		}
 	}
 
-	if !c.hotplugVolumesReady(vmi) {
+	// A VMI resuming from a saved state commits to the restore once its
+	// source is mounted, in the same status update as the mount, and starts
+	// once that is persisted.
+	restoreReady := c.restoreReady(vmi)
+	if !c.hotplugVolumesReady(vmi) || !restoreReady {
 		c.queue.AddAfter(controller.VirtualMachineInstanceKey(vmi), time.Second*1)
 		return false, nil
 	}
@@ -2318,6 +2327,9 @@ func isACPIEnabled(vmi *v1.VirtualMachineInstance, domain *api.Domain) bool {
 }
 
 func (c *VirtualMachineController) calculateVmPhaseForStatusReason(domain *api.Domain, vmi *v1.VirtualMachineInstance) (v1.VirtualMachineInstancePhase, error) {
+	if restoreFailed(vmi, domain) {
+		return v1.Failed, nil
+	}
 
 	if domain == nil {
 		if vmi.IsMigrationTarget() && vmi.Status.MigrationState != nil && vmi.Status.MigrationState.Failed {
