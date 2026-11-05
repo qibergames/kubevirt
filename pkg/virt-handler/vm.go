@@ -498,7 +498,6 @@ func (c *VirtualMachineController) generateEventsForVolumeStatusChange(vmi *v1.V
 func (c *VirtualMachineController) updateHotplugVolumeStatus(vmi *v1.VirtualMachineInstance, volumeStatus v1.VolumeStatus, specVolumeMap map[string]struct{}) (v1.VolumeStatus, bool) {
 	needsRefresh := false
 	if volumeStatus.Target == "" {
-		needsRefresh = true
 		mounted, err := c.hotplugVolumeMounter.IsMounted(vmi, volumeStatus.Name, volumeStatus.HotplugVolume.AttachPodUID)
 		if err != nil {
 			c.logger.Object(vmi).Errorf("error occurred while checking if volume is mounted: %v", err)
@@ -521,6 +520,8 @@ func (c *VirtualMachineController) updateHotplugVolumeStatus(vmi *v1.VirtualMach
 				volumeStatus.Reason = VolumeUnMountedFromPodReason
 			}
 		}
+		_, inSpec := specVolumeMap[volumeStatus.Name]
+		needsRefresh = !inSpec || !storagetypes.IsMountedDirectoryVolume(vmi, &volumeStatus)
 	} else {
 		// Successfully attached to VM.
 		volumeStatus.Phase = v1.VolumeReady

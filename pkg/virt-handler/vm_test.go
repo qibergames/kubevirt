@@ -1746,6 +1746,35 @@ var _ = Describe("VirtualMachineInstance", func() {
 				Entry("When target is unset", ""),
 			)
 
+			DescribeTable("should keep checking a hotplug volume until it settles", func(addVolume func(*v1.VirtualMachineInstance, *v1.VolumeStatus), phase v1.VolumePhase, mounted, expectRefresh bool) {
+				vmi := api2.NewMinimalVMI("testvmi")
+				vmi.UID = vmiTestUUID
+				volumeStatus := v1.VolumeStatus{
+					Name:          "test",
+					Phase:         phase,
+					HotplugVolume: &v1.HotplugVolumeStatus{AttachPodName: "testpod", AttachPodUID: "1234"},
+				}
+				addVolume(vmi, &volumeStatus)
+				specVolumes := map[string]struct{}{}
+				for _, volume := range vmi.Spec.Volumes {
+					specVolumes[volume.Name] = struct{}{}
+				}
+				for _, volume := range vmi.Spec.UtilityVolumes {
+					specVolumes[volume.Name] = struct{}{}
+				}
+				mockHotplugVolumeMounter.EXPECT().IsMounted(vmi, "test", gomock.Any()).Return(mounted, nil)
+
+				_, needsRefresh := controller.updateHotplugVolumeStatus(vmi, volumeStatus, specVolumes)
+				Expect(needsRefresh).To(Equal(expectRefresh))
+			},
+				Entry("utility volume that is mounted", withUtilityVolume, v1.HotplugVolumeMounted, true, false),
+				Entry("utility volume that is still attaching", withUtilityVolume, v1.HotplugVolumeAttachedToNode, false, true),
+				Entry("memory dump volume while the dump runs", withMemoryDumpVolume, v1.MemoryDumpVolumeInProgress, true, false),
+				Entry("memory dump volume once the dump completed", withMemoryDumpVolume, v1.MemoryDumpVolumeCompleted, true, false),
+				Entry("memory dump volume removed from the spec", withMemoryDumpStatusOnly, v1.MemoryDumpVolumeCompleted, true, true),
+				Entry("disk volume that is mounted but not attached to the domain yet", withDiskVolume, v1.HotplugVolumeMounted, true, true),
+			)
+
 			It("Should generate a ready event when target is assigned", func() {
 				vmi := api2.NewMinimalVMI("testvmi")
 				vmi.UID = vmiTestUUID
@@ -3732,4 +3761,42 @@ func withFilesystemDevice(deviceName string) libvmi.Option {
 			Virtiofs: &v1.FilesystemVirtiofs{},
 		})
 	}
+}
+
+func withUtilityVolume(vmi *v1.VirtualMachineInstance, volumeStatus *v1.VolumeStatus) {
+	vmi.Spec.UtilityVolumes = append(vmi.Spec.UtilityVolumes, v1.UtilityVolume{
+		Name:                              volumeStatus.Name,
+		PersistentVolumeClaimVolumeSource: k8sv1.PersistentVolumeClaimVolumeSource{ClaimName: volumeStatus.Name},
+	})
+}
+
+func withMemoryDumpVolume(vmi *v1.VirtualMachineInstance, volumeStatus *v1.VolumeStatus) {
+	vmi.Spec.Volumes = append(vmi.Spec.Volumes, v1.Volume{
+		Name: volumeStatus.Name,
+		VolumeSource: v1.VolumeSource{
+			MemoryDump: &v1.MemoryDumpVolumeSource{
+				PersistentVolumeClaimVolumeSource: v1.PersistentVolumeClaimVolumeSource{
+					PersistentVolumeClaimVolumeSource: k8sv1.PersistentVolumeClaimVolumeSource{ClaimName: volumeStatus.Name},
+					Hotpluggable:                      true,
+				},
+			},
+		},
+	})
+	withMemoryDumpStatusOnly(vmi, volumeStatus)
+}
+
+func withMemoryDumpStatusOnly(_ *v1.VirtualMachineInstance, volumeStatus *v1.VolumeStatus) {
+	volumeStatus.MemoryDumpVolume = &v1.DomainMemoryDumpInfo{ClaimName: volumeStatus.Name}
+}
+
+func withDiskVolume(vmi *v1.VirtualMachineInstance, volumeStatus *v1.VolumeStatus) {
+	vmi.Spec.Volumes = append(vmi.Spec.Volumes, v1.Volume{
+		Name: volumeStatus.Name,
+		VolumeSource: v1.VolumeSource{
+			PersistentVolumeClaim: &v1.PersistentVolumeClaimVolumeSource{
+				PersistentVolumeClaimVolumeSource: k8sv1.PersistentVolumeClaimVolumeSource{ClaimName: volumeStatus.Name},
+				Hotpluggable:                      true,
+			},
+		},
+	})
 }
